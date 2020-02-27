@@ -2,6 +2,7 @@
 import socket
 import struct
 import time
+import threading
 
 debug = 1
 
@@ -116,8 +117,41 @@ class PeerToPeer:
             self.__debug("Listening for connections...")
             client_socket, client_address = s.accept()
             client_socket.settimeout(None)
-            
+        except:
+            print(traceback.print_exc())
 
+    @staticmethod
+    def test_socket_connection():
+        def client():
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.connect(('localhost', 8080))
+            s.send(b'(Client) test')
+            data = s.recv(1024)
+            s.close()
+            print(data)
 
-net = PeerToPeer()
-net.start()
+        def server():
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(('', 8080))
+            s.listen(1)
+            conn, addr = s.accept()
+            while 1:
+                data = conn.recv(1024)
+                print("(Server) " + str(data))
+                if not data:
+                    break
+                conn.send(data.upper())
+            conn.close()
+
+        server = threading.Thread(target=server)
+        server.start()
+        time.sleep(1)
+        client = threading.Thread(target=client)
+        client.start()
+
+# net = PeerToPeer()
+# net.start()
+
+PeerToPeer.test_socket_connection()
