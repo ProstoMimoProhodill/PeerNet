@@ -3,6 +3,8 @@ import socket
 import struct
 import time
 import threading
+import traceback
+import random
 
 debug = 1
 
@@ -66,14 +68,16 @@ class PeerConnection:
 class PeerToPeer:
     def __init__(self, maxpeers=None, serverport=None, serverhost=None, id=None):
         self.debug = debug
+        self.__shutdown = False
         if maxpeers: self.__maxpeers = int(maxpeers)
         else: self.__maxpeers = 2
         if serverport: self.__serverport = int(serverport)
-        else: self.__serverport = 8080
+        else: self.__serverport = random.randint(2000, 8000)
         if serverhost: self.__serverhost = str(serverhost)
         else: self.__init_server_host()
         if id: self.__id = str(id)
         else: self.__id = '{serverhost}:{serverport}'.format(serverhost=str(self.__serverhost), serverport=str(self.__serverport))
+        self.peers = []
 
         self.__debug("Create node with id " + str(self.__id))
 
@@ -93,17 +97,28 @@ class PeerToPeer:
         s.close()
 
     def __handle_peer(self, client_socket):
-        host, port = client_socket.getpeername()
-        peer_connection = PeerConnection(None, host, port, client_socket)
+
+        self.__debug("Current Thread: {thread} | Connected to {peer}".format(thread=str(threading.currentThread().getName()), peer=str(client_socket.getpeername())))
+
+        # host, port = client_socket.getpeername()
+        # peer_connection = PeerConnection(None, host, port, client_socket)
 
         try:
             message_type, message_data = peer_connection.recv_data()
         except:
             self.__error(traceback.print_exc())
 
+    def add_peer(self, id, host, port):
+        if peer_id not in seld.peers:
+            self.peers[id] = (host, int(port))
+            return True
+        else:
+            return False
+
     def make_server_socket(self, serverport):
         backlog = 5
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(('', serverport))
         s.listen(backlog)
         return s
@@ -113,12 +128,24 @@ class PeerToPeer:
         s.settimeout(2)
         self.__debug("Server start: id {id} ({host}:{port})".format(id=str(self.__id), host=self.__serverhost, port=str(self.__serverport)))
 
-        try:
-            self.__debug("Listening for connections...")
-            client_socket, client_address = s.accept()
-            client_socket.settimeout(None)
-        except:
-            print(traceback.print_exc())
+        while not self.__shutdown:
+            try:
+                self.__debug("Listening for connections...")
+                client_socket, client_address = s.accept()
+                client_socket.settimeout(None)
+                t = threading.Thread(target=self.__handle_peer, args=[client_socket])
+                t.start()
+            except KeyboardInterrupt:
+                self.__debug("Stop (Keyboard Interrupt)")
+                self.__shutdown = True
+                continue
+            except socket.timeout:
+                self.__debug("Socket timeout")
+                continue
+            except:
+                print(traceback.print_exc())
+
+        self.__debug("Exit from <start>")
 
     @staticmethod
     def test_socket_connection():
@@ -151,7 +178,7 @@ class PeerToPeer:
         client = threading.Thread(target=client)
         client.start()
 
-# net = PeerToPeer()
-# net.start()
+net = PeerToPeer()
+net.start()
 
-PeerToPeer.test_socket_connection()
+# PeerToPeer.test_socket_connection()
