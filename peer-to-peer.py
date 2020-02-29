@@ -72,7 +72,7 @@ class PeerToPeer:
         if maxpeers: self.__maxpeers = int(maxpeers)
         else: self.__maxpeers = 2
         if serverport: self.__serverport = int(serverport)
-        else: self.__serverport = random.randint(2000, 8000)
+        else: self.__serverport = random.randint(2500, 2510)
         if serverhost: self.__serverhost = str(serverhost)
         else: self.__init_server_host()
         if id: self.__id = str(id)
@@ -100,11 +100,12 @@ class PeerToPeer:
 
         self.__debug("Current Thread: {thread} | Connected to {peer}".format(thread=str(threading.currentThread().getName()), peer=str(client_socket.getpeername())))
 
-        # host, port = client_socket.getpeername()
-        # peer_connection = PeerConnection(None, host, port, client_socket)
+        host, port = client_socket.getpeername()
+        peer_connection = PeerConnection(None, host, port, client_socket)
 
         try:
             message_type, message_data = peer_connection.recv_data()
+            self.__success("type: {type} | data: {data}".format(type=str(message_type), data=str(message_data)))
         except:
             self.__error(traceback.print_exc())
 
@@ -114,6 +115,20 @@ class PeerToPeer:
             return True
         else:
             return False
+
+    def __search_peers(self):
+        delay = 0.5
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.settimeout(0.5)
+        while not self.__shutdown:
+            for i in range(2500, 2510):
+                try:
+                    connection = s.connect(('', i))
+                    self.__success("Find {i} port".format(i=str(i)))
+                    connection.close()
+                except:
+                    pass
 
     def make_server_socket(self, serverport):
         backlog = 5
@@ -128,13 +143,21 @@ class PeerToPeer:
         s.settimeout(2)
         self.__debug("Server start: id {id} ({host}:{port})".format(id=str(self.__id), host=self.__serverhost, port=str(self.__serverport)))
 
+        search_peers_thread = threading.Thread(target=self.__search_peers)
+        search_peers_thread.start()
+
         while not self.__shutdown:
             try:
                 self.__debug("Listening for connections...")
+
+                # s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                # s1.connect(('', self.__serverport))
+
                 client_socket, client_address = s.accept()
                 client_socket.settimeout(None)
                 t = threading.Thread(target=self.__handle_peer, args=[client_socket])
                 t.start()
+                t.join()
             except KeyboardInterrupt:
                 self.__debug("Stop (Keyboard Interrupt)")
                 self.__shutdown = True
@@ -178,7 +201,8 @@ class PeerToPeer:
         client = threading.Thread(target=client)
         client.start()
 
-net = PeerToPeer()
-net.start()
+host = input('host: ')
+port = input('port: ')
 
-# PeerToPeer.test_socket_connection()
+peer = PeerToPeer(None, port, host, None)
+peer.start()
